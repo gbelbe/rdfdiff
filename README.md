@@ -1,6 +1,6 @@
-# semanticdiff
+# rdfdiff
 
-`semanticdiff` reads an RDF file's Git history as changes to its vocabulary,
+`rdfdiff` reads an RDF file's Git history as changes to its vocabulary,
 rather than as changed characters. It reports classes, properties, individuals,
 
 Equivalent RDF serializations produce no semantic change, so reformatting,
@@ -10,7 +10,7 @@ ontology evolution.
 ## Install
 
 ```sh
-uv tool install semanticdiff
+uv tool install rdfdiff
 ```
 
 Or run the current checkout:
@@ -59,6 +59,15 @@ uv run mypy semanticdiff
 uv run pytest -q
 ```
 
-The project deliberately has no dependency on Ster. Ster can consume it as an
-optional integration, but the diff engine and command-line tool remain usable
-with any RDF repository.
+The distribution is named `rdfdiff`; its Python import and command-line command
+remain `semanticdiff`. The project deliberately has no dependency on Ster. Ster
+can consume it as an optional integration, but the diff engine and command-line
+tool remain usable with any RDF repository.
+
+## Releases
+
+Releases are published to PyPI by the `pypi-publish.yml` GitHub Actions workflow
+when a `v*` tag is pushed. PyPI trusted publishing must be configured for the
+`gbelbe/semanticdiff` repository, the `pypi-publish.yml` workflow, and the
+  `pypi` environment before the first release tag is created. The pending PyPI
+  publisher must use the `rdfdiff` project name.

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "semanticdiff"
+name = "rdfdiff"
 version = "0.1.0"
 description = "Read an RDF file's Git history as semantic change rather than text"
 readme = "README.md"
