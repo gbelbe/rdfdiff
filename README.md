@@ -52,17 +52,20 @@ root: `Change`, `ChangeKind`, `ChangeSet`, `CommitChanges`, and `EntityKind`.
 ## Development
 
 ```sh
-uv sync --extra dev
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy semanticdiff
-uv run pytest -q
+bash scripts/ci.sh
 ```
+
+The local gate runs the same checks on Python 3.12 and 3.13 as GitHub Actions.
+Pass one version, for example `bash scripts/ci.sh 3.13`, for faster iteration.
 
 The distribution is named `rdfdiff`; its Python import and command-line command
 remain `semanticdiff`. The project deliberately has no dependency on Ster. Ster
 can consume it as an optional integration, but the diff engine and command-line
 tool remain usable with any RDF repository.
+
+The test suite includes pure graph comparisons, Git-history and CLI tests, and
+BDD scenarios for semantic change reporting. The throw-away Git repositories in
+the tests exercise real Git plumbing rather than mocks.
 
 ## Releases
 

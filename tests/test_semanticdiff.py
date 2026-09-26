@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 from rdflib import Graph
+from typer.testing import CliRunner
+
 from semanticdiff import ChangeKind, compare, read_history
 from semanticdiff.cli import app
-from typer.testing import CliRunner
 
 PREFIXES = """\
 @prefix ex: <https://example.org/> .
