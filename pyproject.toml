@@ -29,8 +29,10 @@ dependencies = [
 dev = [
     "pytest>=9.0",
     "pytest-bdd>=7.0",
+    "pytest-cov>=5.0",
     "ruff>=0.4",
     "mypy>=1.10",
+    "pip-audit>=2.7",
 ]
 
 [project.scripts]
@@ -47,6 +49,16 @@ packages = ["semanticdiff"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short --strict-markers --strict-config"
+
+[tool.coverage.run]
+source_pkgs = ["semanticdiff"]
+relative_files = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "if TYPE_CHECKING:",
+    "if __name__ == [\"']__main__[\"']:",
+]
 
 [tool.ruff]
 target-version = "py312"
