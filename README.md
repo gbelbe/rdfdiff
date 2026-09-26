@@ -71,6 +71,6 @@ the tests exercise real Git plumbing rather than mocks.
 
 Releases are published to PyPI by the `pypi-publish.yml` GitHub Actions workflow
 when a `v*` tag is pushed. PyPI trusted publishing must be configured for the
-`gbelbe/semanticdiff` repository, the `pypi-publish.yml` workflow, and the
-  `pypi` environment before the first release tag is created. The pending PyPI
-  publisher must use the `rdfdiff` project name.
+`gbelbe/rdfdiff` repository, the `pypi-publish.yml` workflow, and the `pypi`
+environment before the first release tag is created. The pending PyPI publisher
+must use the `rdfdiff` project name.
