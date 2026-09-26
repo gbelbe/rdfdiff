@@ -64,6 +64,10 @@ remain `semanticdiff`. The project deliberately has no dependency on Ster. Ster
 can consume it as an optional integration, but the diff engine and command-line
 tool remain usable with any RDF repository.
 
+The test suite includes pure graph comparisons, Git-history and CLI tests, and
+BDD scenarios for semantic change reporting. The throw-away Git repositories in
+the tests exercise real Git plumbing rather than mocks.
+
 ## Releases
 
 Releases are published to PyPI by the `pypi-publish.yml` GitHub Actions workflow
