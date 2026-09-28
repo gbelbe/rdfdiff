@@ -2,17 +2,101 @@ name: checks
 
 on:
   push:
+    branches: ["main"]
   pull_request:
+    branches: ["main"]
 
+# Cancel any in-progress run for the same branch / PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Structured after ster's own .github/workflows/ci.yml (same repo family) —
+# scaled down: no JS lint (no browser assets here) and no Sonar (no project
+# registered for this repo). One job per concern so a failure is easy to spot
+# and the fast checks aren't stuck behind the full matrix.
 jobs:
-  test:
+
+  # ── 1. Static checks via prek ────────────────────────────────────────────────
+  # ruff (lint + format, incl. its S/flake8-bandit security rules), mypy and
+  # file hygiene, through prek + .pre-commit-config.yaml — the exact hooks
+  # developers run locally, so CI can never drift from local.
+  checks:
+    name: Static checks (prek)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+
+      - name: Install deps
+        run: uv sync --extra dev
+
+      - name: prek — lint, format, types, security, hygiene
+        run: SKIP=complexity-ratchet uvx prek run --all-files
+
+  # ── 2. Complexity ratchet (diff-aware) ───────────────────────────────────────
+  complexity:
+    name: Complexity ratchet
+    runs-on: ubuntu-latest
+    # Diff-aware: only meaningful against a PR's base branch.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
         with:
-          python-version: ${{ matrix.python }}
-      - run: bash scripts/ci.sh ${{ matrix.python }}
+          fetch-depth: 0   # need the base branch to compare complexity against
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install deps
+        run: uv sync --extra dev
+
+      - name: Complexity ratchet — no function may grow worse past 15
+        run: uv run python scripts/check_complexity_ratchet.py --path semanticdiff --base "origin/${{ github.base_ref }}"
+
+  # ── 3. pip-audit (dependency CVEs) ───────────────────────────────────────────
+  security:
+    name: Security (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install deps
+        run: uv sync --extra dev
+
+      - name: pip-audit — dependency CVEs
+        run: uv run pip-audit --skip-editable
+
+  # ── 4. Tests + coverage ──────────────────────────────────────────────────────
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install deps
+        run: uv sync --extra dev
+
+      - name: Run tests with coverage
+        run: uv run pytest --tb=short -q --cov=semanticdiff --cov-report=xml --cov-report=term-missing
+
+      - name: Patch coverage — changed lines must be ≥ 90% covered
+        # Diff-aware: only on PRs, once (latest Python).
+        if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
+        run: >
+          uv run diff-cover coverage.xml
+          --compare-branch "origin/${{ github.base_ref }}"
+          --fail-under 90

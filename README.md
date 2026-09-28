@@ -1,7 +1,12 @@
 # rdfdiff
 
+[![checks](https://github.com/gbelbe/rdfdiff/actions/workflows/ci.yml/badge.svg)](https://github.com/gbelbe/rdfdiff/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/rdfdiff.svg)](https://pypi.org/project/rdfdiff/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 `rdfdiff` reads an RDF file's Git history as changes to its vocabulary,
 rather than as changed characters. It reports classes, properties, individuals,
+concepts and ontologies as added, removed, modified, renamed, or deprecated.
 
 Equivalent RDF serializations produce no semantic change, so reformatting,
 prefix changes, reordered triples, and blank-node relabeling do not hide actual
@@ -51,12 +56,19 @@ root: `Change`, `ChangeKind`, `ChangeSet`, `CommitChanges`, and `EntityKind`.
 
 ## Development
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the branch/commit conventions,
+and the full local development workflow. Quick start:
+
 ```sh
-bash scripts/ci.sh
+uv sync --extra dev
+bash scripts/install-hooks.sh   # one-time: pre-commit + pre-push hooks
+bash scripts/ci.sh              # full local gate before every push
 ```
 
-The local gate runs the same checks on Python 3.12 and 3.13 as GitHub Actions.
-Pass one version, for example `bash scripts/ci.sh 3.13`, for faster iteration.
+`scripts/ci.sh` runs on your current interpreter (fast feedback); GitHub
+Actions runs the full 3.12 / 3.13 matrix on every PR. Pass `--fast` to skip
+the patch-coverage gate during iteration, or `--fix` to let the linters
+auto-fix what they can before re-checking.
 
 The distribution is named `rdfdiff`; its Python import and command-line command
 remain `semanticdiff`. The project deliberately has no dependency on Ster. Ster
@@ -74,3 +86,9 @@ when a `v*` tag is pushed. PyPI trusted publishing must be configured for the
 `gbelbe/rdfdiff` repository, the `pypi-publish.yml` workflow, and the `pypi`
 environment before the first release tag is created. The pending PyPI publisher
 must use the `rdfdiff` project name.
+
+**Known gap:** trusted publishing was not configured before `v0.1.1` was
+tagged, so that publish failed (`invalid-publisher`) and only `0.1.0` is
+live on PyPI today. Configure the trusted publisher on
+[PyPI's project settings](https://pypi.org/manage/project/rdfdiff/settings/publishing/)
+before pushing another release tag.
