@@ -34,6 +34,16 @@ dev = [
     "mypy>=1.10",
     "pip-audit>=2.7",
 ]
+# craft-gate's craftCov scan (scripts/craftcov.py) and the Refactor First CI
+# gate built on it (scripts/check_refactor_first.py) — see CRAFTSMANSHIP.md.
+# ruff is already in `dev`, listed again here so `uv sync --extra craftcov`
+# alone is enough to run either script, without also pulling in `dev`.
+craftcov = [
+    "pyyaml>=6.0",
+    "ruff>=0.13",
+    "pylint>=3.3",
+    "vulture>=2.14",
+]
 
 [project.scripts]
 semanticdiff = "semanticdiff.cli:main"
