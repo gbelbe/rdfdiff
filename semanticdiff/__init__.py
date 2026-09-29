@@ -12,7 +12,11 @@ that — so it can be extracted into its own distribution unchanged.
 from __future__ import annotations
 
 from semanticdiff.changeset import compare
-from semanticdiff.history import CommitChanges, read_history
+from semanticdiff.history import (
+    CommitChanges,
+    export_diff_html,
+    read_history,
+)
 from semanticdiff.vocabulary import Change, ChangeKind, ChangeSet, EntityKind
 
 __all__ = [
@@ -22,5 +26,6 @@ __all__ = [
     "CommitChanges",
     "EntityKind",
     "compare",
+    "export_diff_html",
     "read_history",
 ]
