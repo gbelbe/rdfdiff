@@ -108,3 +108,83 @@ def test_unknown_revision_exits_nonzero(ontology_repo: RepoBuilder) -> None:
 
     assert result.exit_code != 0
     assert "v9.9" in result.stdout
+
+
+def test_visual_command_exports_html(ontology_repo: RepoBuilder, tmp_path: Path) -> None:
+    ontology_repo.commit(ttl=CLASS_A, message="first")
+    out_file = tmp_path / "diff.html"
+
+    result = runner.invoke(
+        app,
+        ["visual", "HEAD", REPO_FLAG, str(ontology_repo.path), "-o", str(out_file)],
+    )
+
+    assert result.exit_code == 0
+    assert out_file.exists()
+    assert "vis.Network" in out_file.read_text(encoding="utf-8")
+
+    # If file exists, visual command returns file directly without recomputing
+    out_file.write_text("pre-existing content", encoding="utf-8")
+    result2 = runner.invoke(
+        app,
+        ["visual", "HEAD", REPO_FLAG, str(ontology_repo.path), "-o", str(out_file)],
+    )
+    assert result2.exit_code == 0
+    assert str(out_file) in result2.stdout
+    assert out_file.read_text(encoding="utf-8") == "pre-existing content"
+
+
+def test_visual_command_with_status_filter(ontology_repo: RepoBuilder, tmp_path: Path) -> None:
+    ontology_repo.commit(ttl=CLASS_A, message="first")
+    out_file = tmp_path / "added.html"
+
+    result = runner.invoke(
+        app,
+        [
+            "visual",
+            "HEAD",
+            REPO_FLAG,
+            str(ontology_repo.path),
+            "--status",
+            "added",
+            "-o",
+            str(out_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out_file.exists()
+
+
+def test_visual_command_with_kind_alias(ontology_repo: RepoBuilder, tmp_path: Path) -> None:
+    ontology_repo.commit(ttl=CLASS_A, message="first")
+    out_file = tmp_path / "added_alias.html"
+
+    result = runner.invoke(
+        app,
+        [
+            "visual",
+            "HEAD",
+            REPO_FLAG,
+            str(ontology_repo.path),
+            "--kind",
+            "added",
+            "-o",
+            str(out_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out_file.exists()
+
+
+def test_visual_command_invalid_status(ontology_repo: RepoBuilder) -> None:
+    ontology_repo.commit(ttl=CLASS_A, message="first")
+
+    result = runner.invoke(
+        app,
+        ["visual", "HEAD", REPO_FLAG, str(ontology_repo.path), "--status", "unknown"],
+    )
+
+    assert result.exit_code != 0
+    assert "invalid --status" in result.stdout

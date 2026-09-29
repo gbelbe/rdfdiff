@@ -89,3 +89,28 @@ def test_non_rdf_file_count_is_carried_through(ontology_repo: RepoBuilder) -> No
     )
 
     assert read_history(ontology_repo.path, HEAD, ONTOLOGY)[0].commit.other_files == 2
+
+
+def test_export_diff_html_and_graphs_for_commit(ontology_repo: RepoBuilder) -> None:
+    from semanticdiff.history import graphs_for_commit, render_diff_html
+
+    ontology_repo.commit(ttl=CLASS_A, message="first")
+    sha2 = ontology_repo.commit(ttl=CLASS_AB, message="second")
+
+    parent_g, child_g = graphs_for_commit(ontology_repo.path, ONTOLOGY, sha2)
+    assert len(parent_g) > 0
+    assert len(child_g) > len(parent_g)
+
+    out = render_diff_html(ontology_repo.path, ONTOLOGY, sha2)
+    assert out.exists()
+    assert out.parent == ontology_repo.path / ".semanticdiff" / "diffs"
+    assert out.name == f"{sha2}.html"
+
+    # cached path returned
+    out2 = render_diff_html(ontology_repo.path, ONTOLOGY, sha2)
+    assert out2 == out
+
+    # filter status changes filename
+    out_added = render_diff_html(ontology_repo.path, ONTOLOGY, sha2, status="added")
+    assert out_added.exists()
+    assert out_added.name == f"{sha2}_added.html"

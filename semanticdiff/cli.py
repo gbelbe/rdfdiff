@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from semanticdiff.git_log import RDF_SUFFIXES, GitError, list_tracked
+from semanticdiff.git_log import RDF_SUFFIXES, GitError, list_tracked, resolve
 from semanticdiff.history import read_history
 from semanticdiff.render.text import render_commits, render_entity, render_summary
 
@@ -19,6 +19,13 @@ app = typer.Typer(
 _REPO = typer.Option(Path("."), "--repo", help="Repository to read.")
 _FILE = typer.Option(None, "--file", help="Tracked RDF file. Autodetected when omitted.")
 _RANGE = typer.Argument("HEAD", help="Revision range, e.g. v0.1..v0.2.")
+_OUTPUT = typer.Option(None, "--output", "-o", help="Target output HTML file path.")
+_STATUS = typer.Option(
+    None,
+    "--status",
+    "-s",
+    help="Filter visual diff elements: added, deleted, or updated.",
+)
 
 
 @app.command()
@@ -46,6 +53,42 @@ def show(
     """Trace one entity through the history."""
     _, history = _load(repo, rev_range, file, with_text=False)
     typer.echo(render_entity(history, uri))
+
+
+@app.command()
+def visual(
+    commit: str = typer.Argument("HEAD", help="Commit revision or hash to render visually."),
+    repo: Path = _REPO,
+    file: str | None = _FILE,
+    status: str | None = _STATUS,
+    output: Path | None = _OUTPUT,
+) -> None:
+    """Export an interactive HTML visual graph diff for a commit."""
+    if not (repo / ".git").exists():
+        raise _fail(f"{repo} is not a git repository")
+    path = file or _detect(repo)
+    sha = resolve(repo, commit)
+    if not sha:
+        raise _fail(f"cannot resolve revision '{commit}'")
+
+    valid_statuses = {"added", "deleted", "updated"}
+    if status is not None and status not in valid_statuses:
+        raise _fail(f"invalid --status '{status}'; choose from {', '.join(sorted(valid_statuses))}")
+
+    from semanticdiff.history import export_diff_html
+
+    if output is not None:
+        if output.exists():
+            out_file = output
+        else:
+            suffix = f" [{status}]" if status else ""
+            out_file = export_diff_html(
+                repo, path, sha, status, output, title=f"Commit {sha[:8]}{suffix}"
+            )
+    else:
+        out_file = export_diff_html(repo, path, sha, status=status)
+
+    typer.echo(str(out_file))
 
 
 def _load(repo: Path, rev_range: str, file: str | None, *, with_text: bool) -> tuple[str, list]:
