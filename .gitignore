@@ -10,3 +10,4 @@ build/
 .craftcov_cache.json
 .craftcov_last_report.json
 .coverage
+coverage.xml

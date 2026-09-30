@@ -173,6 +173,8 @@ jobs:
         python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scripts/ci.sh needs origin/main for tidy-ratchet + patch-coverage
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python }}
