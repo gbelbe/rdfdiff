@@ -9,3 +9,4 @@ build/
 *.egg-info/
 .craftcov_cache.json
 .craftcov_last_report.json
+.coverage
