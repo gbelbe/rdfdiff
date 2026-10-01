@@ -1,18 +1,32 @@
 """Diff-aware complexity ratchet — cyclomatic and cognitive.
 
-Fails a change that makes complexity *worse*, while grandfathering functions
-that are already over the threshold:
+Covers catalog.yaml's high-cyclomatic-complexity, high-cognitive-complexity,
+invariant-return, and duplicated-string-literal entries (CG032-CG035) — the
+mechanical enforcement CRAFTSMANSHIP.md's "The complexity ratchet" section
+documents. These four aren't part of craftCov's own scan (craftcov.py
+--list-detectors won't show them) — they're diff-aware ratchets like
+Refactor First, not a whole-repo report, so they live in their own script
+and their own catalog entries have no `detectors` field.
 
-    A function is a violation when, in the change, its complexity exceeds
-    THRESHOLD *and* it increased versus the base (a brand-new function has
-    base complexity 0).
+Fails a change that leaves complexity *at or above where it started*, while
+grandfathering functions the change never reaches at all:
+
+    A function already over THRESHOLD that the diff actually touches (via
+    `git diff -U0`, matched against the function's line range) must come
+    out *lower* than it went in — unchanged is not enough, only a genuine
+    decrease passes. A function the diff never reaches is grandfathered
+    regardless of its complexity. A brand-new function (base complexity 0)
+    over THRESHOLD always fails.
 
 This blocks: new functions over the threshold, an already-complex function
-made more complex, and a simple function pushed over the threshold. It allows:
-untouched complex functions, and complex functions refactored *down*.
+made more complex *or left exactly as complex as before* once touched, and a
+simple function pushed over the threshold. It allows: untouched complex
+functions (touched only elsewhere in the same file), and complex functions
+refactored *down* — even if the result is still over THRESHOLD, since paying
+down debt is a ratchet, not a one-shot requirement.
 
-Two further checks mirror the SonarQube rules that this project keeps tripping
-over, so they fail here rather than after a push:
+Two further checks mirror SonarQube rules many teams already gate on, so
+they fail here rather than after a push:
 
     Cognitive complexity (S3776), same ratchet, same threshold. It is a
     different measure from cyclomatic — it charges for *nesting*, so a function
@@ -33,14 +47,18 @@ is evaluated exactly like new code and must meet the threshold on its own,
 not compared against an identically-named entry that happened to live
 somewhere else in the base ref.
 
+Needs the `complexity` extra (`radon`, `cognitive-complexity`) — see the
+README's Install section for the exact versions this release expects.
+
 Usage:
-    python scripts/check_complexity_ratchet.py [--base origin/main] [--path ster]
+    python scripts/check_complexity_ratchet.py [--base origin/main] [--path .]
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import re
 import subprocess
 import sys
 import tempfile
@@ -54,26 +72,102 @@ def find_violations(
     head_cc: dict[str, int],
     threshold: int = THRESHOLD,
     metric: str = "complexity",
+    touched: set[str] | None = None,
 ) -> list[str]:
-    """Return human-readable violation messages for the ratchet rule."""
+    """Return human-readable violation messages for the ratchet rule.
+
+    Without *touched* (the default): the original rule — a violation only
+    when *cc* increased versus *base* (a brand-new function has base 0).
+    Unchanged-and-already-over-threshold is silently allowed, because
+    without diff information there is no way to tell "genuinely untouched"
+    from "touched but numerically unchanged" apart, and the former must
+    never be flagged.
+
+    With *touched* (a set of names this change's diff actually reaches —
+    see `_touched_names`): a name in *touched* whose *cc* is still over
+    *threshold* must have strictly *decreased*, not just avoided
+    increasing — matching every consuming repo's own written policy
+    ("if your change touches an over-threshold function, bring its
+    complexity down"). A name *not* in *touched* falls back to the
+    original unchanged-is-fine rule, since by construction an untouched
+    name's *cc* never differs from *base* anyway.
+    """
     violations: list[str] = []
     for name, cc in sorted(head_cc.items()):
         if cc <= threshold:
             continue
         base = base_cc.get(name, 0)
-        if cc <= base:
-            continue  # grandfathered (unchanged) or refactored down — allowed
-        if name in base_cc:
-            violations.append(
-                f"{name}: {metric} {base} → {cc} (> {threshold}) — "
-                f"refactor to reduce {metric} instead of adding to it"
-            )
-        else:
+        if name not in base_cc:
             violations.append(
                 f"{name}: new function with {metric} {cc} (> {threshold}) — "
                 f"keep new functions at or below {threshold}"
             )
+        elif touched is not None and name in touched:
+            if cc < base:
+                continue  # touched and genuinely improved — allowed
+            verb = "unchanged at" if cc == base else f"{base} →"
+            violations.append(
+                f"{name}: {metric} {verb} {cc} (> {threshold}) — this function was "
+                f"touched and is still over {threshold}; reduce {metric}, don't just "
+                f"avoid increasing it"
+            )
+        elif cc > base:
+            violations.append(
+                f"{name}: {metric} {base} → {cc} (> {threshold}) — "
+                f"refactor to reduce {metric} instead of adding to it"
+            )
+        # else: cc <= base, not known to be touched — grandfathered, allowed
     return violations
+
+
+def _changed_lines(base_ref: str, root: Path, rel_path: str) -> set[int]:
+    """Line numbers in *rel_path*'s current working-tree content that this
+    change added, modified, or deleted at, versus *base_ref* — via
+    `git diff -U0`.
+
+    Zero context means every hunk's "+" side is exactly the lines that
+    changed, nothing surrounding. A pure-deletion hunk reports a new-side
+    count of 0; its anchor line (the insertion point) is still counted as
+    touched, since deleting the last statement in a function is a change
+    *to* that function even though nothing was added.
+    """
+    out = subprocess.run(
+        ["git", "diff", "--no-color", "-U0", base_ref, "--", rel_path],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    lines: set[int] = set()
+    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", out, re.MULTILINE):
+        start = int(m.group(1))
+        count = int(m.group(2)) if m.group(2) is not None else 1
+        lines.update(range(start, start + count)) if count else lines.add(start)
+    return lines
+
+
+def _touched_names(root: Path, base_ref: str, ranges: dict[str, tuple[int, int]]) -> set[str]:
+    """Names from *ranges* (``<relpath>::<qualified name>`` → (lineno, endline))
+    whose line range overlaps a line this change touched in that file.
+
+    One `git diff` per file, not per function — cheap enough, and a file
+    with no diff at all (nothing in *ranges* here was touched) skips
+    straight past without running git at all.
+    """
+    by_file: dict[str, list[str]] = {}
+    for name in ranges:
+        by_file.setdefault(name.split("::", 1)[0], []).append(name)
+
+    touched: set[str] = set()
+    for file_rel, names in by_file.items():
+        changed = _changed_lines(base_ref, root, file_rel)
+        if not changed:
+            continue
+        for name in names:
+            start, end = ranges[name]
+            if any(start <= line <= end for line in changed):
+                touched.add(name)
+    return touched
 
 
 def _functions(blocks: object) -> list[object]:
@@ -90,12 +184,44 @@ def _functions(blocks: object) -> list[object]:
     return out
 
 
+def _discover_python_files(root: Path) -> list[Path]:
+    """Every *.py file under root git doesn't ignore, sorted — tracked or
+    not, since this is a "head" scan of the current working tree and a
+    brand-new function in a file you haven't `git add`ed yet is exactly
+    the case this ratchet needs to catch, not skip.
+
+    Not `root.rglob("*.py")`: with `--path` defaulting to `.` (the whole
+    repo, not a pre-scoped source subdirectory the way kai-ster's own
+    `--path ster` happened to be), an unfiltered rglob walks straight into
+    `.venv/`/`node_modules/`/caches and reports hundreds of violations in
+    vendored code that was never this repo's to fix.
+
+    Not plain `git ls-files` either (tracked-only, unlike craftcov.py's own
+    `discover_python_files`, which scans a committed cache/snapshot flow
+    where that's the right call): `--others --exclude-standard` adds every
+    untracked file git *wouldn't* ignore, so a new file still fails the
+    ratchet before its first `git add`. Falls back to a plain rglob outside
+    a git repo.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.py"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        return sorted(root / line for line in out.splitlines() if line)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return sorted(root.rglob("*.py"))
+
+
 def compute_functions(root: Path) -> dict[str, tuple[int, int, int]]:
     """Map ``<relpath>::<qualified function name>`` → (complexity, lineno, endline)."""
     from radon.complexity import cc_visit  # lazy: keeps find_violations import-light
 
     result: dict[str, tuple[int, int, int]] = {}
-    for path in sorted(root.rglob("*.py")):
+    for path in _discover_python_files(root):
         try:
             source = path.read_text(encoding="utf-8")
             blocks = cc_visit(source)
@@ -138,23 +264,31 @@ def _walk_functions(node: ast.AST, stack: list[str]):
             yield from _walk_functions(child, stack)
 
 
-def compute_cognitive(root: Path) -> dict[str, int]:
-    """Map ``<relpath>::<qualified function name>`` → cognitive complexity."""
+def compute_cognitive_ranges(root: Path) -> dict[str, tuple[int, int, int]]:
+    """Map ``<relpath>::<qualified function name>`` → (cognitive complexity, lineno, endline)."""
     from cognitive_complexity.api import get_cognitive_complexity  # lazy, as above
 
-    result: dict[str, int] = {}
-    for path in sorted(root.rglob("*.py")):
+    result: dict[str, tuple[int, int, int]] = {}
+    for path in _discover_python_files(root):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         rel = path.relative_to(root).as_posix()
         for name, node in _walk_functions(tree, []):
-            result[f"{rel}::{name}"] = get_cognitive_complexity(node)
+            end = getattr(node, "end_lineno", node.lineno) or node.lineno
+            result[f"{rel}::{name}"] = (get_cognitive_complexity(node), node.lineno, end)
     return result
 
 
+def compute_cognitive(root: Path) -> dict[str, int]:
+    """Map ``<relpath>::<qualified function name>`` → cognitive complexity."""
+    return {name: cc for name, (cc, _l, _e) in compute_cognitive_ranges(root).items()}
+
+
 # ── Invariant return (SonarQube S3516) ───────────────────────────────────────
+
+MIN_RETURNS_TO_COMPARE = 2  # a single return can't be "invariant" against itself
 
 
 def _returns_one_never_rebound_name(node: ast.AST) -> str | None:
@@ -169,7 +303,9 @@ def _returns_one_never_rebound_name(node: ast.AST) -> str | None:
         for child in ast.walk(node)
         if isinstance(child, ast.Return) and _encloses(node, child)
     ]
-    if len(returns) < 2 or not all(isinstance(r.value, ast.Name) for r in returns):
+    if len(returns) < MIN_RETURNS_TO_COMPARE or not all(
+        isinstance(r.value, ast.Name) for r in returns
+    ):
         return None
     names = {r.value.id for r in returns}  # type: ignore[union-attr]
     if len(names) != 1:
@@ -196,7 +332,7 @@ def _encloses(func: ast.AST, stmt: ast.AST) -> bool:
 def compute_invariant_returns(root: Path) -> dict[str, str]:
     """Map ``<relpath>::<qualified function name>`` → the invariantly returned name."""
     result: dict[str, str] = {}
-    for path in sorted(root.rglob("*.py")):
+    for path in _discover_python_files(root):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, SyntaxError):
@@ -216,6 +352,7 @@ def compute_invariant_returns(root: Path) -> dict[str, str]:
 
 DUPLICATE_LITERAL_THRESHOLD = 3
 DUPLICATE_LITERAL_MIN_LENGTH = 5
+MIN_OCCURRENCES_TO_REPORT = 2  # a literal seen once isn't "duplicated" yet
 
 
 def _docstring_node_ids(tree: ast.AST) -> set[int]:
@@ -257,7 +394,7 @@ def compute_duplicate_literals(
     left out entirely — the ratchet only ever cares about repeats.
     """
     result: dict[str, int] = {}
-    for path in sorted(root.rglob("*.py")):
+    for path in _discover_python_files(root):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, SyntaxError):
@@ -273,7 +410,7 @@ def compute_duplicate_literals(
             counts[literal] = counts.get(literal, 0) + 1
         rel = path.relative_to(root).as_posix()
         for literal, count in counts.items():
-            if count >= 2:
+            if count >= MIN_OCCURRENCES_TO_REPORT:
                 result[f"{rel}::{literal}"] = count
     return result
 
@@ -321,21 +458,37 @@ def _measure_at_ref(
             )
 
 
-def _complexity_at_ref(ref: str, path: str) -> dict[str, int]:
-    """Cyclomatic complexity for *path* at git *ref*."""
-    return _measure_at_ref(ref, path)[0]
+def has_tidy_exempt(base_ref: str) -> bool:
+    """True when a `Tidy-Exempt:` trailer appears anywhere in `base_ref..HEAD`.
+
+    Same bypass, same trailer, as check_tidy_ratchet.sh and
+    check_refactor_first.py — one exemption mechanism for every gate this
+    project ships, not a separate one per script.
+    """
+    out = subprocess.run(
+        ["git", "log", "--format=%B", f"{base_ref}..HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    return any(line.startswith("Tidy-Exempt:") for line in out.splitlines())
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
-    parser.add_argument("--path", default="ster", help="source directory to scan")
+    parser.add_argument("--path", default=".", help="source directory to scan")
     args = parser.parse_args(argv)
+
+    if has_tidy_exempt(args.base):
+        print(f"Complexity ratchet: Tidy-Exempt: trailer found in {args.base}..HEAD — skipping.")
+        return 0
 
     root = Path(args.path)
     head_funcs = compute_functions(root)
     head = {name: cc for name, (cc, _l, _e) in head_funcs.items()}
-    head_cog = compute_cognitive(root)
+    head_cog_ranges = compute_cognitive_ranges(root)
+    head_cog = {name: cc for name, (cc, _l, _e) in head_cog_ranges.items()}
     head_inv = compute_invariant_returns(root)
     head_dup = compute_duplicate_literals(root)
     try:
@@ -344,8 +497,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: could not read base ref {args.base!r}: {exc.stderr or exc}", file=sys.stderr)
         return 2
 
-    violations = find_violations(base, head, metric="cyclomatic complexity")
-    violations += find_violations(base_cog, head_cog, metric="cognitive complexity")
+    # A name this change's diff actually reaches — vs. numerically unchanged
+    # because it merely happens to sit in a file with unrelated edits.
+    # Touched-and-still-over-threshold must decrease, not just not increase.
+    cc_ranges = {n: (v[1], v[2]) for n, v in head_funcs.items()}
+    cog_ranges = {n: (v[1], v[2]) for n, v in head_cog_ranges.items()}
+    touched_cc = _touched_names(root, args.base, cc_ranges)
+    touched_cog = _touched_names(root, args.base, cog_ranges)
+
+    violations = find_violations(base, head, metric="cyclomatic complexity", touched=touched_cc)
+    violations += find_violations(
+        base_cog, head_cog, metric="cognitive complexity", touched=touched_cog
+    )
     # Grandfathered like the ratchet: an invariant return that was already there
     # is not this change's problem, but a new one is.
     violations += [

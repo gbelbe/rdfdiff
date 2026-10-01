@@ -16,6 +16,13 @@
 
 set -euo pipefail
 
+# Tidy First ratchet — text-only commit-message check against the base branch.
+if git rev-parse --verify --quiet origin/main >/dev/null; then
+  bash scripts/check_tidy_ratchet.sh --base origin/main
+else
+  echo "origin/main not found — skipping tidy ratchet (run: git fetch origin main)" >&2
+fi
+
 SENTINEL=".ci-passed"
 rm -f "$SENTINEL"
 

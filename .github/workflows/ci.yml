@@ -2,101 +2,208 @@ name: checks
 
 on:
   push:
-    branches: ["main"]
   pull_request:
-    branches: ["main"]
 
-# Cancel any in-progress run for the same branch / PR
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-
-# Structured after ster's own .github/workflows/ci.yml (same repo family) —
-# scaled down: no JS lint (no browser assets here) and no Sonar (no project
-# registered for this repo). One job per concern so a failure is easy to spot
-# and the fast checks aren't stuck behind the full matrix.
 jobs:
-
-  # ── 1. Static checks via prek ────────────────────────────────────────────────
-  # ruff (lint + format, incl. its S/flake8-bandit security rules), mypy and
-  # file hygiene, through prek + .pre-commit-config.yaml — the exact hooks
-  # developers run locally, so CI can never drift from local.
-  checks:
-    name: Static checks (prek)
+  # Text-only check on commit messages — no deps to install, no build. Only
+  # meaningful against a PR's base branch.
+  tidy:
+    name: Tidy First ratchet
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-
-      - name: Install deps
-        run: uv sync --extra dev
-
-      - name: prek — lint, format, types, security, hygiene
-        run: SKIP=complexity-ratchet uvx prek run --all-files
-
-  # ── 2. Complexity ratchet (diff-aware) ───────────────────────────────────────
-  complexity:
-    name: Complexity ratchet
-    runs-on: ubuntu-latest
-    # Diff-aware: only meaningful against a PR's base branch.
-    if: github.event_name == 'pull_request'
+    # Skips bot-authored PRs (dependabot, etc.) — see complexity job's comment.
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # need the base branch to compare complexity against
+          fetch-depth: 0   # need the base branch and full commit history
 
-      - uses: astral-sh/setup-uv@v5
+      - name: "Tidy First ratchet: a tidy(<type>) commit or Tidy-Exempt trailer"
+        run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
 
-      - name: Install deps
-        run: uv sync --extra dev
-
-      - name: Complexity ratchet — no function may grow worse past 15
-        run: uv run python scripts/check_complexity_ratchet.py --path semanticdiff --base "origin/${{ github.base_ref }}"
-
-  # ── 3. pip-audit (dependency CVEs) ───────────────────────────────────────────
-  security:
-    name: Security (pip-audit)
+  # Mechanical companion to the ratchet above: for the 8 catalog heuristics
+  # craftCov can detect (scripts/craftcov.py --list-detectors), a touched
+  # .py file's total across them must go down (or stay at 0) vs. where the
+  # branch diverged from main. See CRAFTSMANSHIP.md's "Refactor First".
+  refactor-first:
+    name: Refactor First gate
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-
-      - name: Install deps
-        run: uv sync --extra dev
-
-      - name: pip-audit — dependency CVEs
-        run: uv run pip-audit --skip-editable
-
-  # ── 4. Tests + coverage ──────────────────────────────────────────────────────
-  test:
-    name: Test (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13"]
+    # Skips bot-authored PRs (dependabot, etc.) — see complexity job's comment.
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ matrix.python-version }}
 
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: "Refactor First: touched files' detectable-heuristic total must go down (or stay 0)"
+        run: uv run python3 scripts/check_refactor_first.py --base "origin/${{ github.base_ref }}"
+
+  # Independent of craftCov — own script, own catalog entries (CG032-
+  # CG035), own toolchain (radon, cognitive-complexity).
+  complexity:
+    name: Complexity ratchet
+    runs-on: ubuntu-latest
+    # Skips bot-authored PRs (dependabot, etc.): can't write a Tidy-Exempt:
+    # trailer, and a dependency bump has no complexity to fix.
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra complexity
+        run: uv sync --extra complexity
+
+      - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
+        run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
+
+  # craft-gate's fifth default gate, on by default but a verified no-op
+  # without a [tool.mutmut] section (see the check step below) — not yet
+  # configured here, so this currently just confirms it stays a no-op
+  # every PR. See CRAFTSMANSHIP.md's "Mutation ratchet" before adding
+  # [tool.mutmut]: it reruns the whole test suite once per mutant.
+  mutation-ratchet:
+    name: Mutation ratchet
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for a [tool.mutmut] / [mutmut] config (this repo's opt-in)
+        id: configured
+        run: |
+          if grep -qE '^\[tool\.mutmut\]' pyproject.toml 2>/dev/null \
+             || grep -qE '^\[mutmut\]' setup.cfg 2>/dev/null; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "yes=false" >> "$GITHUB_OUTPUT"
+            echo "No [tool.mutmut] config found — skipping (see CRAFTSMANSHIP.md's 'Mutation ratchet' to opt in)."
+          fi
+
+      - uses: astral-sh/setup-uv@v5
+        if: steps.configured.outputs.yes == 'true'
+
+      - name: uv sync --extra mutation --extra dev
+        if: steps.configured.outputs.yes == 'true'
+        run: uv sync --extra mutation --extra dev
+
+      - name: Cache mutmut results
+        if: steps.configured.outputs.yes == 'true'
+        uses: actions/cache@v4
+        with:
+          path: mutants
+          key: mutmut-${{ runner.os }}-${{ hashFiles('**/*.py') }}
+          restore-keys: mutmut-${{ runner.os }}-
+
+      - name: mutmut run
+        if: steps.configured.outputs.yes == 'true'
+        run: uv run mutmut run
+
+      - name: "Mutation ratchet: touched functions' mutation score"
+        if: steps.configured.outputs.yes == 'true'
+        run: uv run python3 scripts/check_mutation_ratchet.py --base "origin/${{ github.base_ref }}" --threshold 80
+
+  # Reporting, not a gate — see DESIGN.md's Reporting section.
+  craftcov-pr-comment:
+    name: craftCov PR report
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: Post/update the craftCov PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run python3 scripts/craftcov_pr_comment.py \
+            --base "origin/${{ github.base_ref }}" \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}"
+
+  # Optional reporting, not a gate. Public repo, so code scanning is
+  # available with no extra licensing.
+  craftcov-sarif:
+    name: Upload craftCov SARIF
+    runs-on: ubuntu-latest
+    # This repo's own `push:` trigger isn't branch-scoped (unlike
+    # pull_request, which the other jobs already guard against) — restrict
+    # explicitly to main so this doesn't fire on every feature-branch push.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: Generate craftCov SARIF
+        run: uv run python3 scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif
+
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: craftcov.sarif
+          category: craftcov
+
+  checks:
+    name: Static checks (prek)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
       - name: Install deps
         run: uv sync --extra dev
+      - name: prek — lint, format, types, security, hygiene
+        run: SKIP=complexity-ratchet uvx prek run --all-files
 
-      - name: Run tests with coverage
-        run: uv run pytest --tb=short -q --cov=semanticdiff --cov-report=xml --cov-report=term-missing
+  security:
+    name: Security (pip-audit)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install deps
+        run: uv sync --extra dev
+      - name: pip-audit — dependency CVEs
+        run: uv run pip-audit --skip-editable
 
-      - name: Patch coverage — changed lines must be ≥ 90% covered
-        # Diff-aware: only on PRs, once (latest Python).
-        if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
-        run: >
-          uv run diff-cover coverage.xml
-          --compare-branch "origin/${{ github.base_ref }}"
-          --fail-under 90
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scripts/ci.sh needs origin/main for tidy-ratchet + patch-coverage
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: bash scripts/ci.sh ${{ matrix.python }}

@@ -86,3 +86,11 @@ repos:
         always_run: true
         pass_filenames: false
         stages: [pre-push]
+
+      - id: tidy-ratchet
+        name: "tidy ratchet (tidy(<type>) commit or Tidy-Exempt: trailer)"
+        entry: bash scripts/check_tidy_ratchet.sh --base origin/main
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
