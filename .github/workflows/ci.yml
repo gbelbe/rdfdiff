@@ -169,6 +169,8 @@ jobs:
   checks:
     name: Static checks (prek)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -182,6 +184,8 @@ jobs:
   security:
     name: Security (pip-audit)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
