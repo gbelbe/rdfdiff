@@ -339,7 +339,6 @@ def describe_visual_graph():
         assert "deleted" in statuses
 
         out_file = tmp_path / "diff.html"
-        assert render_diff_html is render_diff_html
         res = render_diff_html(base, later, out_file, title="Test Diff")
         assert res == out_file
         assert out_file.exists()

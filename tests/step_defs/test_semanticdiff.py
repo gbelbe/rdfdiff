@@ -14,8 +14,8 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from rdflib import Graph
 
 from semanticdiff.changeset import compare
-from semanticdiff.git_log import UnknownRevisionError
-from semanticdiff.history import read_history
+from semanticdiff.git_log import UnknownRevisionError, resolve
+from semanticdiff.history import export_diff_html, read_history
 from semanticdiff.render.text import render_commits, render_entity, render_summary
 from semanticdiff.vocabulary import ChangeKind, EntityKind
 from tests._ontology_repo import ONTOLOGY, RepoBuilder
@@ -340,6 +340,20 @@ def when_entity(ctx, curie):
     ctx["output"] = render_entity(history_of(ctx), curie)
 
 
+@when("visual diff HTML is exported for that commit")
+def when_visual_exported(ctx):
+    repo = ctx["repo"]
+    sha = resolve(repo.path, "HEAD")
+    ctx["html_file"] = export_diff_html(repo.path, ONTOLOGY, sha)
+
+
+@when(parsers.parse('visual diff HTML is exported with status "{status}"'))
+def when_visual_exported_with_status(ctx, status):
+    repo = ctx["repo"]
+    sha = resolve(repo.path, "HEAD")
+    ctx["html_file"] = export_diff_html(repo.path, ONTOLOGY, sha, status=status)
+
+
 # ── Then: changes ─────────────────────────────────────────────────────────────
 
 
@@ -523,3 +537,20 @@ def then_pure_formatting(ctx):
 @then("the output notes two non-RDF files changed")
 def then_non_rdf(ctx):
     assert "2 non-RDF files" in ctx["output"]
+
+
+@then("an HTML visualization file is created")
+def then_html_file_created(ctx):
+    assert ctx["html_file"].exists()
+
+
+@then("the HTML file contains the interactive network graph")
+def then_html_contains_graph(ctx):
+    content = ctx["html_file"].read_text(encoding="utf-8")
+    assert "vis.Network" in content
+
+
+@then(parsers.parse('an HTML visualization file is created with status "{status}" in its filename'))
+def then_html_file_with_status(ctx, status):
+    assert ctx["html_file"].exists()
+    assert f"_{status}.html" in ctx["html_file"].name

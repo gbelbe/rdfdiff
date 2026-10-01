@@ -200,3 +200,16 @@ Feature: Read a git history of an ontology as semantic change, not as text
     Given a history whose commit adds class "ex:Vehicle"
     When the per-commit view is rendered with the text option
     Then the raw diff hunk appears in the output
+
+  # ── Layer 4: visual graph diff export ─────────────────────────────────────────
+
+  Scenario: Exporting visual diff HTML generates an interactive network graph
+    Given a history whose commit adds class "ex:Vehicle"
+    When visual diff HTML is exported for that commit
+    Then an HTML visualization file is created
+    And the HTML file contains the interactive network graph
+
+  Scenario: Exporting visual diff HTML with status filter restricts the output
+    Given a history whose commit adds class "ex:Vehicle"
+    When visual diff HTML is exported with status "added"
+    Then an HTML visualization file is created with status "added" in its filename

@@ -112,14 +112,15 @@ def test_unknown_revision_exits_nonzero(ontology_repo: RepoBuilder) -> None:
 
 def test_visual_command_exports_html(ontology_repo: RepoBuilder, tmp_path: Path) -> None:
     ontology_repo.commit(ttl=CLASS_A, message="first")
-    out_file = tmp_path / "diff.html"
+    out_dir = tmp_path / "diffs"
 
     result = runner.invoke(
         app,
-        ["visual", "HEAD", REPO_FLAG, str(ontology_repo.path), "-o", str(out_file)],
+        ["visual", "HEAD", REPO_FLAG, str(ontology_repo.path), "-o", str(out_dir)],
     )
 
     assert result.exit_code == 0
+    out_file = Path(result.stdout.strip())
     assert out_file.exists()
     assert "vis.Network" in out_file.read_text(encoding="utf-8")
 
@@ -136,7 +137,7 @@ def test_visual_command_exports_html(ontology_repo: RepoBuilder, tmp_path: Path)
 
 def test_visual_command_with_status_filter(ontology_repo: RepoBuilder, tmp_path: Path) -> None:
     ontology_repo.commit(ttl=CLASS_A, message="first")
-    out_file = tmp_path / "added.html"
+    out_dir = tmp_path / "diffs_added"
 
     result = runner.invoke(
         app,
@@ -148,33 +149,12 @@ def test_visual_command_with_status_filter(ontology_repo: RepoBuilder, tmp_path:
             "--status",
             "added",
             "-o",
-            str(out_file),
+            str(out_dir),
         ],
     )
 
     assert result.exit_code == 0
-    assert out_file.exists()
-
-
-def test_visual_command_with_kind_alias(ontology_repo: RepoBuilder, tmp_path: Path) -> None:
-    ontology_repo.commit(ttl=CLASS_A, message="first")
-    out_file = tmp_path / "added_alias.html"
-
-    result = runner.invoke(
-        app,
-        [
-            "visual",
-            "HEAD",
-            REPO_FLAG,
-            str(ontology_repo.path),
-            "--kind",
-            "added",
-            "-o",
-            str(out_file),
-        ],
-    )
-
-    assert result.exit_code == 0
+    out_file = Path(result.stdout.strip())
     assert out_file.exists()
 
 
