@@ -1,20 +1,96 @@
-# Git hooks — run with prek (https://prek.j178.dev) or classic pre-commit.
-#   Install once:   prek install --hook-type pre-push
-#   Run manually:   bash scripts/check_tidy_ratchet.sh --base origin/main
+# Git hooks — run with prek (https://prek.j178.dev), a fast, drop-in
+# pre-commit replacement (uses uv, runs hooks in parallel).
 #
-# Tidy First discipline (see the tidy-first skill): every push must contain a
-# tidy(<type>): commit or a Tidy-Exempt: trailer since origin/main. Text-only
-# check on commit messages — no test run, so it costs milliseconds.
+#   Install once:   bash scripts/install-hooks.sh      (runs `prek install`)
+#   Run manually:   prek run --all-files                (commit-stage checks)
+#
+# Hook stages:
+#   • pre-commit → the lint / type / security / complexity checks below.
+#   • pre-push   → the CI gate (scripts/pre-push.sh): blocks a push unless the
+#     full local gate (scripts/ci.sh) passed within the last 60 minutes. The
+#     actual tests + pip-audit run inside ci.sh, so we don't duplicate them as
+#     push hooks — the gate guarantees the *whole* suite (incl. diff-cover) ran,
+#     not just a bare pytest.
+#
+# These commit-stage hooks are the single source of truth for the static
+# checks: scripts/ci.sh and .github/workflows/ci.yml both invoke `prek run`
+# instead of duplicating commands. All project tools run via `uv run` so prek
+# uses the *pinned* versions from uv.lock (identical to CI) — never a
+# separately-pinned hook version that could drift.
+#
+# Adapted from ster's own .pre-commit-config.yaml (same repo family) — dropped
+# import-linter, since rdfdiff is one flat package with no layering to enforce.
 
-default_install_hook_types: [pre-push]
+default_install_hook_types: [pre-commit, pre-push]
+
+default_language_version:
+  python: python3.12
 
 repos:
+  # ── generic file hygiene ──────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: debug-statements   # catch leftover breakpoint() / pdb calls
+
+  # ── project checks via the synced dev env (language: system → uses uv) ───────
+  # Modifying hooks (ruff --fix, ruff format) double as CI checks: if they change
+  # a file, prek exits non-zero, so CI fails on un-formatted / fixable code.
   - repo: local
     hooks:
+      - id: ruff
+        name: ruff (lint, autofix)
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+
+      - id: mypy
+        name: mypy (type check)
+        entry: uv run mypy semanticdiff
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: complexity-ratchet
+        # Diff-aware ratchet: grandfathers existing violations and enforces the
+        # configured threshold only on changed complexity.
+        name: complexity ratchet (cyclomatic · cognitive · invariant return)
+        entry: uv run python scripts/check_complexity_ratchet.py --path semanticdiff
+        language: system
+        types: [python]
+        pass_filenames: false
+        # manual: the ratchet is diff-aware and needs --base, which prek has no
+        # way to supply. CI runs the script directly with the PR's base ref;
+        # scripts/ci.sh does the same against origin/main.
+        stages: [manual]
+
+      # ── push gate (pre-push only) ────────────────────────────────────────────
+      # Don't re-run tests here: block the push unless the full local gate
+      # (scripts/ci.sh — tests, pip-audit, diff-cover) passed < 60 min ago.
+      # The sentinel .ci-passed is written by ci.sh on success.
+      - id: ci-gate
+        name: CI gate (full scripts/ci.sh passed < 60 min ago)
+        entry: bash scripts/pre-push.sh
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
+
       - id: tidy-ratchet
-        name: "tidy ratchet (tidy(<type>): commit or Tidy-Exempt: trailer)"
+        name: "tidy ratchet (tidy(<type>) commit or Tidy-Exempt: trailer)"
         entry: bash scripts/check_tidy_ratchet.sh --base origin/main
         language: system
-        pass_filenames: false
         always_run: true
+        pass_filenames: false
         stages: [pre-push]

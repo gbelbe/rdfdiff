@@ -11,3 +11,4 @@ build/
 .craftcov_last_report.json
 .coverage
 coverage.xml
+.ci-passed
