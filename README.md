@@ -38,6 +38,22 @@ Trace one entity through a revision range:
 semanticdiff show ex:Product v0.1..HEAD --repo /path/to/ontology-repository --file ontology.ttl
 ```
 
+Export an interactive visual graph diff HTML page for a commit:
+
+```sh
+semanticdiff visual HEAD --repo /path/to/ontology-repository --file ontology.ttl -o diff.html
+```
+
+Filter visual diff elements by status (`added`, `deleted`, or `updated`):
+
+```sh
+semanticdiff visual HEAD --status added -o added.html
+```
+
+Options for `visual`:
+- `-o`, `--output`: Target output HTML file path.
+- `-s`, `--status`: Filter visual diff elements (`added`, `deleted`, or `updated`).
+
 When a repository has exactly one tracked RDF file, `--file` is optional. Use
 `--text` with `log` to append Git's raw hunks after the semantic report.
 
