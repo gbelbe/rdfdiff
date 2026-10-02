@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from rdflib import Graph, Literal, URIRef
+from pathlib import Path
 
-from semanticdiff.render.visual import build_delta_data
+import pytest
+from rdflib import BNode, Graph, Literal, URIRef
+from rdflib.namespace import XSD
+
+from semanticdiff.render.visual import build_delta_data, render_diff_html
 
 STATUS = "status"
 ADDED = "added"
@@ -66,3 +70,43 @@ def test_build_delta_data_filters_by_status_updated() -> None:
     assert str(s_updated) in up_node_ids
     assert str(s_added) not in up_node_ids
     assert str(s_deleted) not in up_node_ids
+
+
+def test_build_delta_data_invalid_status() -> None:
+    base, later, _, _, _ = _sample_graphs()
+    with pytest.raises(ValueError, match="Unknown status"):
+        build_delta_data(base, later, status="invalid")
+
+
+def test_build_delta_data_node_formatting() -> None:
+    base = Graph()
+    later = Graph()
+
+    bnode = BNode()
+    pred = URIRef("http://example.org/pred#name")
+    long_lit = Literal("This is a very long string that exceeds thirty characters")
+    lang_lit = Literal("bonjour", lang="fr")
+    typed_lit = Literal("42", datatype=XSD.integer)
+    slash_uri = URIRef("http://example.org/path/resource")
+
+    later.add((bnode, pred, long_lit))
+    later.add((bnode, pred, lang_lit))
+    later.add((bnode, pred, typed_lit))
+    later.add((bnode, pred, slash_uri))
+
+    nodes, edges = build_delta_data(base, later)
+    assert len(nodes) > 0
+    assert len(edges) == 4
+
+
+def test_render_diff_html_cached_path(tmp_path: Path) -> None:
+    base, later, _, _, _ = _sample_graphs()
+    out_file = tmp_path / "diff.html"
+    res1 = render_diff_html(base, later, out_file)
+    assert res1 == out_file
+    assert out_file.exists()
+
+    out_file.write_text("already written", encoding="utf-8")
+    res2 = render_diff_html(base, later, out_file)
+    assert res2 == out_file
+    assert out_file.read_text(encoding="utf-8") == "already written"

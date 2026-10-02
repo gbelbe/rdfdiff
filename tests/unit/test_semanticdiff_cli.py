@@ -171,3 +171,24 @@ def test_visual_command_invalid_status(ontology_repo: RepoBuilder) -> None:
 
     assert result.exit_code != 0
     assert "invalid --status" in result.stdout
+
+
+def test_visual_command_default_output(ontology_repo: RepoBuilder) -> None:
+    ontology_repo.commit(ttl=CLASS_A, message=FIRST)
+    result = runner.invoke(app, [VISUAL, "HEAD", REPO_FLAG, str(ontology_repo.path)])
+    assert result.exit_code == 0
+    out_file = Path(result.stdout.strip())
+    assert out_file.exists()
+
+
+def test_visual_command_missing_repo_exits_nonzero(tmp_path: Path) -> None:
+    result = runner.invoke(app, [VISUAL, "HEAD", REPO_FLAG, str(tmp_path)])
+    assert result.exit_code != 0
+    assert "not a git repository" in result.stdout
+
+
+def test_visual_command_unknown_revision_exits_nonzero(ontology_repo: RepoBuilder) -> None:
+    ontology_repo.commit(ttl=CLASS_A, message=FIRST)
+    result = runner.invoke(app, [VISUAL, "v9.9", REPO_FLAG, str(ontology_repo.path)])
+    assert result.exit_code != 0
+    assert "cannot resolve revision" in result.stdout
