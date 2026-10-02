@@ -89,3 +89,15 @@ def test_non_rdf_file_count_is_carried_through(ontology_repo: RepoBuilder) -> No
     )
 
     assert read_history(ontology_repo.path, HEAD, ONTOLOGY)[0].commit.other_files == 2
+
+
+def test_export_diff_html_creates_and_caches_file(ontology_repo: RepoBuilder) -> None:
+    from semanticdiff.history import export_diff_html
+
+    sha = ontology_repo.commit(ttl=CLASS_A, message="initial")
+    out_file = export_diff_html(ontology_repo.path, ONTOLOGY, sha)
+    assert out_file.exists()
+
+    # Cached branch
+    out_file2 = export_diff_html(ontology_repo.path, ONTOLOGY, sha)
+    assert out_file2 == out_file

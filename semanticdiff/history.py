@@ -45,6 +45,45 @@ def read_history(
     ]
 
 
+def export_diff_html(
+    repo: Path,
+    path: str,
+    sha: str,
+    status: str | None = None,
+    out_dir: Path | None = None,
+    title: str | None = None,
+) -> Path:
+    from semanticdiff.render.visual import render_diff_html
+
+    output_dir = out_dir or (repo / ".semanticdiff" / "diffs")
+    filename = f"{sha}_{status}.html" if status else f"{sha}.html"
+    out_path = output_dir / filename
+    if out_path.exists():
+        return out_path
+    output_dir.mkdir(parents=True, exist_ok=True)
+    base, later = _graphs_for_commit(repo, path, sha)
+    suffix = f" [{status}]" if status else ""
+    page_title = title or f"Commit {sha[:8]}{suffix}"
+    return render_diff_html(base, later, out_path, title=page_title, status=status)
+
+
+def _graphs_for_commit(
+    repo: Path,
+    path: str,
+    sha: str,
+    *,
+    graphs: dict[str, Graph] | None = None,
+) -> tuple[Graph, Graph]:
+    """Return (parent_graph, child_graph) for a given commit sha."""
+    memo: dict[str, Graph] = {} if graphs is None else graphs
+    parent_g = _parent(repo, sha, path, memo)
+    try:
+        child_g = _at(repo, sha, path, memo)
+    except UnreadableRevisionError:
+        child_g = Graph()
+    return parent_g, child_g
+
+
 def _entry(
     repo: Path, commit: Commit, path: str, *, with_text: bool, graphs: dict[str, Graph]
 ) -> CommitChanges:
