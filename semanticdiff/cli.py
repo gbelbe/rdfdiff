@@ -27,6 +27,8 @@ _STATUS = typer.Option(
     help="Filter visual diff elements: added, deleted, or updated.",
 )
 
+VALID_GRAPH_DIFF_STATUS = {"added", "deleted", "updated"}
+
 
 @app.command()
 def log(
@@ -71,9 +73,9 @@ def visual(
     if not sha:
         raise _fail(f"cannot resolve revision '{commit}'")
 
-    valid_statuses = {"added", "deleted", "updated"}
-    if status is not None and status not in valid_statuses:
-        raise _fail(f"invalid --status '{status}'; choose from {', '.join(sorted(valid_statuses))}")
+    if status is not None and status not in VALID_GRAPH_DIFF_STATUS:
+        choices = ", ".join(sorted(VALID_GRAPH_DIFF_STATUS))
+        raise _fail(f"invalid --status '{status}'; choose from {choices}")
 
     from semanticdiff.history import export_diff_html
 

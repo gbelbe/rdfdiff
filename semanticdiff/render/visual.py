@@ -41,6 +41,8 @@ _PREFIX_MAP: dict[str, str] = {
     "http://schema.org/": "schema:",
 }
 
+VALID_STATUSES = {"added", "deleted", "updated"}
+
 
 def render_diff_html(
     base: Graph,
@@ -54,7 +56,7 @@ def render_diff_html(
     if output_path.exists():
         return output_path
 
-    nodes, edges = _build_delta_data(base, later, status=status)
+    nodes, edges = build_delta_data(base, later, status=status)
     nodes_json = json.dumps(nodes)
     edges_json = json.dumps(edges)
 
@@ -69,61 +71,69 @@ def render_diff_html(
     return output_path
 
 
-def _build_delta_data(
-    base: Graph, later: Graph, *, status: str | None = None
+def build_delta_data(
+    base: Graph, later: Graph, status: str | None = None
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Extract nodes and edges from RDF delta (added and removed triples).
-
-    `status` optionally filters elements: 'added', 'deleted', or 'updated'.
     """
-    valid_statuses = {"added", "deleted", "updated"}
-    if status is not None and status not in valid_statuses:
-        raise ValueError(f"Unknown status '{status}'; expected one of {sorted(valid_statuses)}")
+    `status` optionally filters elements: 'added', 'deleted', or 'updated'. If None, we take all
+    """
+    if status is not None and status not in VALID_STATUSES:
+        raise ValueError(f"Unknown status '{status}'; expected one of {sorted(VALID_STATUSES)}")
 
+    # Ignore in_both which is the first returned value _
     _, only_base, only_later = graph_diff(to_isomorphic(base), to_isomorphic(later))
 
-    added_nodes = {s for s, _, _ in only_later} | {o for _, _, o in only_later}
-    removed_nodes = {s for s, _, _ in only_base} | {o for _, _, o in only_base}
-    updated_nodes = added_nodes & removed_nodes
-    all_nodes = added_nodes | removed_nodes
+    # Pre-build edge lists and gather node sets in a single pass per graph
+    added_edges, added_nodes = _extract_edges_and_nodes(only_later, added=True)
+    deleted_edges, deleted_nodes = _extract_edges_and_nodes(only_base, added=False)
 
-    all_node_dicts = {
-        str(n): _node_dict(n, n in added_nodes, n in removed_nodes)
-        for n in sorted(all_nodes, key=str)
-    }
+    all_nodes = sorted(added_nodes | deleted_nodes, key=str)
 
-    edges: list[dict[str, Any]] = []
-    if status is None or status == "added":
-        for s, p, o in only_later:
-            edges.append(_edge_dict(s, p, o, added=True))
-    if status is None or status == "deleted":
-        for s, p, o in only_base:
-            edges.append(_edge_dict(s, p, o, added=False))
-    if status == "updated":
-        # Triples connected to an updated node from both base and later
-        for s, p, o in only_later:
-            if s in updated_nodes or o in updated_nodes:
-                edges.append(_edge_dict(s, p, o, added=True))
-        for s, p, o in only_base:
-            if s in updated_nodes or o in updated_nodes:
-                edges.append(_edge_dict(s, p, o, added=False))
-
-    referenced_node_ids = {e["from"] for e in edges} | {e["to"] for e in edges}
-
+    # When status is Null, we take all affeced edges, and nodes
     if status is None:
-        nodes = list(all_node_dicts.values())
-    elif status == "updated":
-        # Keep updated nodes and nodes directly connected via delta edges
+        edges = added_edges + deleted_edges
         nodes = [
-            d
-            for node_id, d in all_node_dicts.items()
-            if d[_ATTR_STATUS] == _STATUS_UPDATED or node_id in referenced_node_ids
+            _get_node_dict(node=n, in_added=n in added_nodes, in_deleted=n in deleted_nodes)
+            for n in all_nodes
         ]
-    else:
-        # Keep nodes connected to the filtered edges
-        nodes = [d for node_id, d in all_node_dicts.items() if node_id in referenced_node_ids]
+    # Filter edges based on requested status
+    elif status == "added":
+        edges = added_edges
+        nodes = _get_affected_nodes_from_edges(edges, added_nodes, deleted_nodes, all_nodes)
+    elif status == "deleted":
+        edges = deleted_edges
+        nodes = _get_affected_nodes_from_edges(edges, added_nodes, deleted_nodes, all_nodes)
+    # Status Updated means intersection of added Node and deleted Nodes
+    elif status == "updated":
+        updated_node_ids = {str(n) for n in (added_nodes & deleted_nodes)}
+        # Edges added only if either from Node or to Node is implied in updated_nodes
+        edges = [
+            edge
+            for edge in (added_edges + deleted_edges)
+            if edge["from"] in updated_node_ids or edge["to"] in updated_node_ids
+        ]
+        nodes = _get_affected_nodes_from_edges(edges, added_nodes, deleted_nodes, all_nodes)
 
     return nodes, edges
+
+
+def _get_affected_nodes_from_edges(edges, added_nodes, deleted_nodes, all_nodes):
+    edge_implied_node_ids = {e["from"] for e in edges} | {e["to"] for e in edges}
+    return [
+        _get_node_dict(node=node, in_added=node in added_nodes, in_deleted=node in deleted_nodes)
+        for node in all_nodes
+        if str(node) in edge_implied_node_ids
+    ]
+
+
+def _extract_edges_and_nodes(triples, added: bool):
+    edges = []
+    nodes = set()
+    for s, p, o in triples:
+        edges.append(_edge_dict(s, p, o, added=added))
+        nodes.add(s)
+        nodes.add(o)
+    return edges, nodes
 
 
 def _shorten_uri(uri_str: str) -> str:
@@ -156,8 +166,8 @@ def _format_node_label(node: Node) -> str:
     return str(node)
 
 
-def _node_dict(node: Node, in_added: bool, in_removed: bool) -> dict[str, Any]:
-    if in_added and in_removed:
+def _get_node_dict(node: Node, in_added: bool, in_deleted: bool) -> dict[str, Any]:
+    if in_added and in_deleted:
         status = _STATUS_UPDATED
         color = _COLOR_UPDATED
     elif in_added:
@@ -188,7 +198,7 @@ def _node_dict(node: Node, in_added: bool, in_removed: bool) -> dict[str, Any]:
     }
 
 
-def _edge_dict(s: Node, p: Node, o: Node, *, added: bool) -> dict[str, Any]:
+def _edge_dict(s: Node, p: Node, o: Node, added: bool) -> dict[str, Any]:
     status = _STATUS_ADDED if added else _STATUS_DELETED
     color = _COLOR_ADDED if added else _COLOR_DELETED
     title_status = "ADDED (+)" if added else "DELETED (-)"
@@ -204,10 +214,6 @@ def _edge_dict(s: Node, p: Node, o: Node, *, added: bool) -> dict[str, Any]:
         "arrows": "to",
         "width": 2,
     }
-
-
-# Backward compatibility aliases
-build_delta_data = _build_delta_data
 
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
