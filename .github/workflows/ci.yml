@@ -153,6 +153,34 @@ jobs:
           sarif_file: craftcov.sarif
           category: craftcov
 
+  checks:
+    name: Static checks (prek)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - name: Install deps
+        run: uv sync --extra dev
+      - name: prek — lint, format, types, security, hygiene
+        run: SKIP=complexity-ratchet uvx prek run --all-files
+
+  security:
+    name: Security (pip-audit)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install deps
+        run: uv sync --extra dev
+      - name: pip-audit — dependency CVEs
+        run: uv run pip-audit --skip-editable
+
   test:
     runs-on: ubuntu-latest
     strategy:
