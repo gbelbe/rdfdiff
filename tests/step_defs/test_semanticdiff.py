@@ -52,6 +52,8 @@ _ENTITIES = {
     "individual": EntityKind.INDIVIDUAL,
 }
 
+_HTML_FILE = "html_file"
+
 
 @pytest.fixture
 def ctx() -> dict[str, Any]:
@@ -344,14 +346,14 @@ def when_entity(ctx, curie):
 def when_visual_exported(ctx):
     repo = ctx["repo"]
     sha = resolve(repo.path, "HEAD")
-    ctx["html_file"] = export_diff_html(repo.path, ONTOLOGY, sha)
+    ctx[_HTML_FILE] = export_diff_html(repo.path, ONTOLOGY, sha)
 
 
 @when(parsers.parse('visual diff HTML is exported with status "{status}"'))
 def when_visual_exported_with_status(ctx, status):
     repo = ctx["repo"]
     sha = resolve(repo.path, "HEAD")
-    ctx["html_file"] = export_diff_html(repo.path, ONTOLOGY, sha, status=status)
+    ctx[_HTML_FILE] = export_diff_html(repo.path, ONTOLOGY, sha, status=status)
 
 
 # ── Then: changes ─────────────────────────────────────────────────────────────
@@ -541,16 +543,16 @@ def then_non_rdf(ctx):
 
 @then("an HTML visualization file is created")
 def then_html_file_created(ctx):
-    assert ctx["html_file"].exists()
+    assert ctx[_HTML_FILE].exists()
 
 
 @then("the HTML file contains the interactive network graph")
 def then_html_contains_graph(ctx):
-    content = ctx["html_file"].read_text(encoding="utf-8")
+    content = ctx[_HTML_FILE].read_text(encoding="utf-8")
     assert "vis.Network" in content
 
 
 @then(parsers.parse('an HTML visualization file is created with status "{status}" in its filename'))
 def then_html_file_with_status(ctx, status):
-    assert ctx["html_file"].exists()
-    assert f"_{status}.html" in ctx["html_file"].name
+    assert ctx[_HTML_FILE].exists()
+    assert f"_{status}.html" in ctx[_HTML_FILE].name

@@ -41,7 +41,7 @@ _PREFIX_MAP: dict[str, str] = {
     "http://schema.org/": "schema:",
 }
 
-VALID_STATUSES = {"added", "deleted", "updated"}
+VALID_STATUSES = {_STATUS_ADDED, _STATUS_DELETED, _STATUS_UPDATED}
 
 
 def render_diff_html(
@@ -97,14 +97,14 @@ def build_delta_data(
             for n in all_nodes
         ]
     # Filter edges based on requested status
-    elif status == "added":
+    elif status == _STATUS_ADDED:
         edges = added_edges
         nodes = _get_affected_nodes_from_edges(edges, added_nodes, deleted_nodes, all_nodes)
-    elif status == "deleted":
+    elif status == _STATUS_DELETED:
         edges = deleted_edges
         nodes = _get_affected_nodes_from_edges(edges, added_nodes, deleted_nodes, all_nodes)
     # Status Updated means intersection of added Node and deleted Nodes
-    elif status == "updated":
+    elif status == _STATUS_UPDATED:
         updated_node_ids = {str(n) for n in (added_nodes & deleted_nodes)}
         # Edges added only if either from Node or to Node is implied in updated_nodes
         edges = [

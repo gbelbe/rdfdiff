@@ -15,6 +15,9 @@ CLASS_A = "ex:A a owl:Class ."
 CLASS_AB = "ex:A a owl:Class . ex:B a owl:Class ."
 REPO_FLAG = "--repo"
 LOG = "log"
+VISUAL = "visual"
+FIRST = "first"
+UTF8 = "utf-8"
 
 
 def test_log_command_accepts_rev_range(ontology_repo: RepoBuilder) -> None:
@@ -102,7 +105,7 @@ def test_missing_repo_exits_nonzero(tmp_path: Path) -> None:
 
 
 def test_unknown_revision_exits_nonzero(ontology_repo: RepoBuilder) -> None:
-    ontology_repo.commit(ttl=CLASS_A, message="first")
+    ontology_repo.commit(ttl=CLASS_A, message=FIRST)
 
     result = runner.invoke(app, [LOG, "v9.9..HEAD", REPO_FLAG, str(ontology_repo.path)])
 
@@ -111,38 +114,38 @@ def test_unknown_revision_exits_nonzero(ontology_repo: RepoBuilder) -> None:
 
 
 def test_visual_command_exports_html(ontology_repo: RepoBuilder, tmp_path: Path) -> None:
-    ontology_repo.commit(ttl=CLASS_A, message="first")
+    ontology_repo.commit(ttl=CLASS_A, message=FIRST)
     out_dir = tmp_path / "diffs"
 
     result = runner.invoke(
         app,
-        ["visual", "HEAD", REPO_FLAG, str(ontology_repo.path), "-o", str(out_dir)],
+        [VISUAL, "HEAD", REPO_FLAG, str(ontology_repo.path), "-o", str(out_dir)],
     )
 
     assert result.exit_code == 0
     out_file = Path(result.stdout.strip())
     assert out_file.exists()
-    assert "vis.Network" in out_file.read_text(encoding="utf-8")
+    assert "vis.Network" in out_file.read_text(encoding=UTF8)
 
     # If file exists, visual command returns file directly without recomputing
-    out_file.write_text("pre-existing content", encoding="utf-8")
+    out_file.write_text("pre-existing content", encoding=UTF8)
     result2 = runner.invoke(
         app,
-        ["visual", "HEAD", REPO_FLAG, str(ontology_repo.path), "-o", str(out_file)],
+        [VISUAL, "HEAD", REPO_FLAG, str(ontology_repo.path), "-o", str(out_file)],
     )
     assert result2.exit_code == 0
     assert str(out_file) in result2.stdout
-    assert out_file.read_text(encoding="utf-8") == "pre-existing content"
+    assert out_file.read_text(encoding=UTF8) == "pre-existing content"
 
 
 def test_visual_command_with_status_filter(ontology_repo: RepoBuilder, tmp_path: Path) -> None:
-    ontology_repo.commit(ttl=CLASS_A, message="first")
+    ontology_repo.commit(ttl=CLASS_A, message=FIRST)
     out_dir = tmp_path / "diffs_added"
 
     result = runner.invoke(
         app,
         [
-            "visual",
+            VISUAL,
             "HEAD",
             REPO_FLAG,
             str(ontology_repo.path),
@@ -159,11 +162,11 @@ def test_visual_command_with_status_filter(ontology_repo: RepoBuilder, tmp_path:
 
 
 def test_visual_command_invalid_status(ontology_repo: RepoBuilder) -> None:
-    ontology_repo.commit(ttl=CLASS_A, message="first")
+    ontology_repo.commit(ttl=CLASS_A, message=FIRST)
 
     result = runner.invoke(
         app,
-        ["visual", "HEAD", REPO_FLAG, str(ontology_repo.path), "--status", "unknown"],
+        [VISUAL, "HEAD", REPO_FLAG, str(ontology_repo.path), "--status", "unknown"],
     )
 
     assert result.exit_code != 0
