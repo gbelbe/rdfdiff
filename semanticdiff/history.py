@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,6 +66,28 @@ def export_diff_html(
     suffix = f" [{status}]" if status else ""
     page_title = title or f"Commit {sha[:8]}{suffix}"
     return render_diff_html(base, later, out_path, title=page_title, status=status)
+
+
+def open_exported_diff_html(
+    repo: Path,
+    path: str,
+    sha: str | None,
+    status: str | None = None,
+    out_dir: Path | None = None,
+    title: str | None = None,
+) -> None:
+    """Export or return cached interactive visual HTML diff and open in browser."""
+    if sha is None:
+        return
+    html_path = export_diff_html(
+        repo,
+        path,
+        sha,
+        status=status,
+        out_dir=out_dir,
+        title=title,
+    )
+    webbrowser.open(html_path.resolve().as_uri())
 
 
 def _graphs_for_commit(

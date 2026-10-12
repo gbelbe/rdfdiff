@@ -101,3 +101,29 @@ def test_export_diff_html_creates_and_caches_file(ontology_repo: RepoBuilder) ->
     # Cached branch
     out_file2 = export_diff_html(ontology_repo.path, ONTOLOGY, sha)
     assert out_file2 == out_file
+
+
+def test_open_exported_diff_html_opens_in_browser(ontology_repo: RepoBuilder) -> None:
+    from unittest.mock import patch
+
+    from semanticdiff.history import export_diff_html, open_exported_diff_html
+
+    sha = ontology_repo.commit(ttl=CLASS_A, message="initial")
+    expected_path = export_diff_html(ontology_repo.path, ONTOLOGY, sha)
+    with patch("webbrowser.open") as mock_open:
+        res = open_exported_diff_html(ontology_repo.path, ONTOLOGY, sha)
+        assert res is None
+        mock_open.assert_called_once_with(expected_path.resolve().as_uri())
+
+
+def test_open_exported_diff_html_with_none_sha_does_not_open_browser(
+    ontology_repo: RepoBuilder,
+) -> None:
+    from unittest.mock import patch
+
+    from semanticdiff.history import open_exported_diff_html
+
+    with patch("webbrowser.open") as mock_open:
+        res = open_exported_diff_html(ontology_repo.path, ONTOLOGY, None)
+        assert res is None
+        mock_open.assert_not_called()

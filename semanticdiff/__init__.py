@@ -15,8 +15,10 @@ from semanticdiff.changeset import compare
 from semanticdiff.history import (
     CommitChanges,
     export_diff_html,
+    open_exported_diff_html,
     read_history,
 )
+from semanticdiff.render.key_bindings import make_visual_diff_bindings
 from semanticdiff.vocabulary import Change, ChangeKind, ChangeSet, EntityKind
 
 __all__ = [
@@ -27,5 +29,7 @@ __all__ = [
     "EntityKind",
     "compare",
     "export_diff_html",
+    "make_visual_diff_bindings",
+    "open_exported_diff_html",
     "read_history",
 ]
