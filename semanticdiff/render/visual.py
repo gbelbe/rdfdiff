@@ -41,7 +41,7 @@ _PREFIX_MAP: dict[str, str] = {
     "http://schema.org/": "schema:",
 }
 
-VALID_STATUSES = {_STATUS_ADDED, _STATUS_DELETED, _STATUS_UPDATED}
+_VALID_STATUSES = {_STATUS_ADDED, _STATUS_DELETED, _STATUS_UPDATED}
 
 
 def render_diff_html(
@@ -77,8 +77,8 @@ def build_delta_data(
     """
     `status` optionally filters elements: 'added', 'deleted', or 'updated'. If None, we take all
     """
-    if status is not None and status not in VALID_STATUSES:
-        raise ValueError(f"Unknown status '{status}'; expected one of {sorted(VALID_STATUSES)}")
+    if status is not None and status not in _VALID_STATUSES:
+        raise ValueError(f"Unknown status '{status}'; expected one of {sorted(_VALID_STATUSES)}")
 
     # Ignore in_both which is the first returned value _
     _, only_base, only_later = graph_diff(to_isomorphic(base), to_isomorphic(later))
