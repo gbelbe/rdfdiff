@@ -41,7 +41,7 @@ if [[ $FAST -eq 0 ]]; then
   if [[ $FRESH -eq 1 ]]; then
     rm -rf mutants
   fi
-  uv run mutmut run
+  uv run python scripts/mutation_plan.py run --base origin/main
   uv run python scripts/check_mutation_ratchet.py --base origin/main --threshold 80
   if git rev-parse --verify --quiet origin/main >/dev/null; then
     uv run diff-cover coverage.xml --compare-branch origin/main --fail-under 90
