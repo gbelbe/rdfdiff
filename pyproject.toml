@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rdfdiff"
-version = "0.1.1"
+version = "0.1.2"
 description = "Read an RDF file's Git history as semantic change rather than text"
 readme = "README.md"
 requires-python = ">=3.12"
