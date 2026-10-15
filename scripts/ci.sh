@@ -15,6 +15,9 @@ for arg in "$@"; do
   esac
 done
 
+# The prek hooks call `uv run ruff` / `uv run mypy`, which live in the dev extra.
+uv sync --extra dev
+
 if [[ $FIX -eq 1 ]]; then
   uvx prek run --all-files || true
   uvx prek run --all-files
@@ -29,7 +32,6 @@ else
   echo "origin/main not found — skipping diff-aware gates (run: git fetch origin main)" >&2
 fi
 
-uv sync --extra dev
 uv run pip-audit --skip-editable
 if [[ $FAST -eq 1 ]]; then
   uv run pytest -q --tb=short
