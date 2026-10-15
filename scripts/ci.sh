@@ -15,8 +15,8 @@ for arg in "$@"; do
   esac
 done
 
-# The prek hooks call `uv run ruff` / `uv run mypy`, which live in the dev extra.
-uv sync --extra dev
+# The prek hooks call `uv run ruff` / `uv run mypy` (dev extra); craftcov.py below needs pylint (craftcov extra).
+uv sync --extra dev --extra craftcov
 
 if [[ $FIX -eq 1 ]]; then
   uvx prek run --all-files || true
