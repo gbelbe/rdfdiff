@@ -64,8 +64,9 @@ mutation = [
 
 [tool.mutmut]
 source_paths = ["semanticdiff"]
-cache_invalidation_files = ["tests/**/*.py", "conftest.py"]
-on_dependency_change = "rerun"
+# scripts/mutation_plan.py decides what a change invalidates (an edited test re-tests the functions it covers, not the whole
+# campaign); mutmut's own blunt invalidation is turned down so it does not reset everything first.
+on_dependency_change = "warn"
 
 [project.scripts]
 semanticdiff = "semanticdiff.cli:main"
@@ -81,6 +82,8 @@ packages = ["semanticdiff"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short --strict-markers --strict-config"
+# craft-gate's scripts import their siblings as top-level modules, as they do when run from scripts/.
+pythonpath = [".", "scripts"]
 
 [tool.coverage.run]
 source_pkgs = ["semanticdiff"]
@@ -107,3 +110,10 @@ ignore = [
 python_version = "3.12"
 ignore_missing_imports = true
 pretty = true
+
+[tool.craft-gate.patch-coverage]
+source = "semanticdiff"
+
+[tool.craft-gate.bdd]
+# the scenarios are bound to their steps in tests/step_defs; tests/features holds the .feature files
+paths = ["tests/features", "tests/step_defs"]
