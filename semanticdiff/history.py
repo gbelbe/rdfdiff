@@ -13,6 +13,8 @@ from semanticdiff.git_log import Commit, merge_base, raw_diff, resolve, walk
 from semanticdiff.loader import UnreadableRevisionError, graph_at_rev
 from semanticdiff.vocabulary import ChangeSet
 
+_HTML_SUFFIX = ".html"
+
 
 @dataclass(frozen=True)
 class CommitChanges:
@@ -57,7 +59,7 @@ def export_diff_html(
     from semanticdiff.render.visual import render_diff_html
 
     output_dir = out_dir or (repo / ".semanticdiff" / "diffs")
-    filename = f"{sha}_{status}.html" if status else f"{sha}.html"
+    filename = f"{sha}_{status}{_HTML_SUFFIX}" if status else f"{sha}{_HTML_SUFFIX}"
     out_path = output_dir / filename
     if out_path.exists():
         return out_path
@@ -104,7 +106,7 @@ def export_branch_diff_html(
     ancestor = merge_base(repo, base, head) or resolve(repo, base) or base
     head_sha = resolve(repo, head) or head
     suffix = f"_{status}" if status else ""
-    filename = f"{ancestor[:8]}..{head_sha[:8]}{suffix}.html"
+    filename = f"{ancestor[:8]}..{head_sha[:8]}{suffix}{_HTML_SUFFIX}"
     out_path = output_dir / filename
     if out_path.exists():
         return out_path
