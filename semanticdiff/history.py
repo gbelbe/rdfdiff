@@ -9,7 +9,7 @@ from pathlib import Path
 from rdflib import Graph
 
 from semanticdiff.changeset import compare
-from semanticdiff.git_log import Commit, raw_diff, resolve, walk
+from semanticdiff.git_log import Commit, merge_base, raw_diff, resolve, walk
 from semanticdiff.loader import UnreadableRevisionError, graph_at_rev
 from semanticdiff.vocabulary import ChangeSet
 
@@ -88,6 +88,74 @@ def open_exported_diff_html(
         title=title,
     )
     webbrowser.open(html_path.resolve().as_uri())
+
+
+def export_branch_diff_html(
+    repo: Path,
+    path: str,
+    base: str = "main",
+    head: str = "HEAD",
+    status: str | None = None,
+    title: str | None = None,
+) -> Path:
+    from semanticdiff.render.visual import render_diff_html
+
+    output_dir = repo / ".semanticdiff" / "diffs"
+    ancestor = merge_base(repo, base, head) or resolve(repo, base) or base
+    head_sha = resolve(repo, head) or head
+    suffix = f"_{status}" if status else ""
+    filename = f"{ancestor[:8]}..{head_sha[:8]}{suffix}.html"
+    out_path = output_dir / filename
+    if out_path.exists():
+        return out_path
+    output_dir.mkdir(parents=True, exist_ok=True)
+    base_g, head_g = _graphs_for_range(repo, path, ancestor, head_sha)
+    status_suffix = f" [{status}]" if status else ""
+    page_title = title or f"{base}...{head}{status_suffix}"
+    return render_diff_html(base_g, head_g, out_path, title=page_title, status=status)
+
+
+def open_exported_branch_diff_html(
+    repo: Path,
+    path: str,
+    base: str = "main",
+    head: str = "HEAD",
+    status: str | None = None,
+    title: str | None = None,
+) -> None:
+    """Export or return cached interactive visual HTML diff for a branch range.
+
+    Opens the generated HTML page in default browser.
+    """
+    html_path = export_branch_diff_html(
+        repo,
+        path,
+        base=base,
+        head=head,
+        status=status,
+        title=title,
+    )
+    webbrowser.open(html_path.resolve().as_uri())
+
+
+def _graphs_for_range(
+    repo: Path,
+    path: str,
+    base_rev: str,
+    head_rev: str,
+    *,
+    graphs: dict[str, Graph] | None = None,
+) -> tuple[Graph, Graph]:
+    memo: dict[str, Graph] = {} if graphs is None else graphs
+    try:
+        base_g = _at(repo, base_rev, path, memo)
+    except UnreadableRevisionError:
+        base_g = Graph()
+    try:
+        head_g = _at(repo, head_rev, path, memo)
+    except UnreadableRevisionError:
+        head_g = Graph()
+    return base_g, head_g
 
 
 def _graphs_for_commit(

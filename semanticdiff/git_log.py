@@ -72,6 +72,12 @@ def resolve(repo: Path, rev: str) -> str | None:
     return result.stdout.strip() or None
 
 
+def merge_base(repo: Path, base: str, head: str) -> str | None:
+    """The common ancestor commit sha of `base` and `head`, or None."""
+    result = _run(repo, "merge-base", base, head)
+    return result.stdout.strip() or None
+
+
 def repo_root(path: Path) -> Path | None:
     """The repository `path` lives in, or None when it is not tracked anywhere."""
     result = _run(path.parent if path.is_file() else path, "rev-parse", "--show-toplevel")

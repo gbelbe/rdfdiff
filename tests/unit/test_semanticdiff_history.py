@@ -127,3 +127,51 @@ def test_open_exported_diff_html_with_none_sha_does_not_open_browser(
         res = open_exported_diff_html(ontology_repo.path, ONTOLOGY, None)
         assert res is None
         mock_open.assert_not_called()
+
+
+def test_export_branch_diff_html_creates_and_caches_file(ontology_repo: RepoBuilder) -> None:
+    from semanticdiff.history import export_branch_diff_html
+
+    ontology_repo.commit(ttl=CLASS_A, message="base commit")
+    ontology_repo._git("checkout", "-b", "feature")
+    ontology_repo.commit(ttl=CLASS_AB, message="feature commit")
+
+    out_file = export_branch_diff_html(ontology_repo.path, ONTOLOGY, base="main", head="HEAD")
+    assert out_file.exists()
+
+    # Cached on repeated call
+    out_file2 = export_branch_diff_html(ontology_repo.path, ONTOLOGY, base="main", head="HEAD")
+    assert out_file2 == out_file
+
+
+def test_export_branch_diff_html_with_status_filter(ontology_repo: RepoBuilder) -> None:
+    from semanticdiff.history import export_branch_diff_html
+
+    ontology_repo.commit(ttl=CLASS_A, message="base commit")
+    ontology_repo._git("checkout", "-b", "feature")
+    ontology_repo.commit(ttl=CLASS_AB, message="feature commit")
+
+    out_file = export_branch_diff_html(
+        ontology_repo.path, ONTOLOGY, base="main", head="HEAD", status="added"
+    )
+    assert out_file.exists()
+    assert "_added.html" in out_file.name
+
+
+def test_open_exported_branch_diff_html_opens_in_browser(
+    ontology_repo: RepoBuilder,
+) -> None:
+    from unittest.mock import patch
+
+    from semanticdiff.history import (
+        export_branch_diff_html,
+        open_exported_branch_diff_html,
+    )
+
+    ontology_repo.commit(ttl=CLASS_A, message="base commit")
+    ontology_repo._git("checkout", "-b", "feature")
+    ontology_repo.commit(ttl=CLASS_AB, message="feature commit")
+    expected_path = export_branch_diff_html(ontology_repo.path, ONTOLOGY, base="main", head="HEAD")
+    with patch("webbrowser.open") as mock_open:
+        open_exported_branch_diff_html(ontology_repo.path, ONTOLOGY, base="main", head="HEAD")
+        mock_open.assert_called_once_with(expected_path.resolve().as_uri())
