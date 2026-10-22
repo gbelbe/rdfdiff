@@ -21,12 +21,12 @@ class CommitChanges:
     """One commit and what it did to the vocabulary."""
 
     commit: Commit
-    changes: ChangeSet
-    unreadable: bool = False
-    raw_text: str | None = None
+    changes: ChangeSet  # noqa V107
+    unreadable: bool = False  # noqa V107
+    raw_text: str | None = None  # noqa V107
 
 
-def read_history(
+def read_history(  # noqa V107
     repo: Path,
     rev_range: str,
     path: str,
@@ -48,7 +48,7 @@ def read_history(
     ]
 
 
-def export_diff_html(
+def export_diff_html(  # noqa: PLR0913
     repo: Path,
     path: str,
     sha: str,
@@ -70,7 +70,7 @@ def export_diff_html(
     return render_diff_html(base, later, out_path, title=page_title, status=status)
 
 
-def open_exported_diff_html(
+def open_exported_diff_html(  # noqa V107
     repo: Path,
     path: str,
     sha: str | None,
@@ -92,7 +92,7 @@ def open_exported_diff_html(
     webbrowser.open(html_path.resolve().as_uri())
 
 
-def export_branch_diff_html(
+def export_branch_diff_html(  # noqa: PLR0913
     repo: Path,
     path: str,
     base: str = "main",
@@ -117,7 +117,7 @@ def export_branch_diff_html(
     return render_diff_html(base_g, head_g, out_path, title=page_title, status=status)
 
 
-def open_exported_branch_diff_html(
+def open_exported_branch_diff_html(  # noqa V107
     repo: Path,
     path: str,
     base: str = "main",

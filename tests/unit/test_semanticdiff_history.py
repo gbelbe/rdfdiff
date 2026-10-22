@@ -41,12 +41,13 @@ def test_each_commit_is_compared_against_its_parent(ontology_repo: RepoBuilder) 
 
 
 def test_a_reformatting_commit_reports_an_empty_changeset(ontology_repo: RepoBuilder) -> None:
+    COMMIT_NUMBER = 2
     ontology_repo.commit(ttl='ex:A a owl:Class ; rdfs:label "A"@en .', message="first")
     ontology_repo.commit(ttl='ex:A rdfs:label "A"@en ; a owl:Class .', message="reformat")
 
     history = read_history(ontology_repo.path, HEAD, ONTOLOGY)
 
-    assert len(history) == 2
+    assert len(history) == COMMIT_NUMBER
     assert len(history[1].changes) == 0
 
 
@@ -97,7 +98,7 @@ def test_non_rdf_file_count_is_carried_through(ontology_repo: RepoBuilder) -> No
         message="mixed",
     )
 
-    assert read_history(ontology_repo.path, HEAD, ONTOLOGY)[0].commit.other_files == 2
+    assert read_history(ontology_repo.path, HEAD, ONTOLOGY)[0].commit.other_files == 2  # noqa PLR2004
 
 
 def test_export_diff_html_creates_and_caches_file(ontology_repo: RepoBuilder) -> None:
