@@ -6,10 +6,19 @@ from semanticdiff.history import read_history
 from semanticdiff.vocabulary import ChangeKind
 from tests._ontology_repo import ONTOLOGY, RepoBuilder
 
+BASE_COMMIT = "base commit"
 CLASS_A = "ex:A a owl:Class ."
 CLASS_AB = "ex:A a owl:Class . ex:B a owl:Class ."
 BROKEN = "not turtle at all {{{"
 HEAD = "HEAD"
+
+PATCH_OPEN_BROWSER = "webbrowser.open"
+
+
+def _setup_feature_branch(repo: RepoBuilder) -> None:
+    repo.commit(ttl=CLASS_A, message=BASE_COMMIT)
+    repo._git("checkout", "-b", "feature")
+    repo.commit(ttl=CLASS_AB, message="feature commit")
 
 
 def test_first_commit_reports_every_entity_as_added(ontology_repo: RepoBuilder) -> None:
@@ -32,12 +41,13 @@ def test_each_commit_is_compared_against_its_parent(ontology_repo: RepoBuilder) 
 
 
 def test_a_reformatting_commit_reports_an_empty_changeset(ontology_repo: RepoBuilder) -> None:
+    COMMIT_NUMBER = 2
     ontology_repo.commit(ttl='ex:A a owl:Class ; rdfs:label "A"@en .', message="first")
     ontology_repo.commit(ttl='ex:A rdfs:label "A"@en ; a owl:Class .', message="reformat")
 
     history = read_history(ontology_repo.path, HEAD, ONTOLOGY)
 
-    assert len(history) == 2
+    assert len(history) == COMMIT_NUMBER
     assert len(history[1].changes) == 0
 
 
@@ -88,7 +98,7 @@ def test_non_rdf_file_count_is_carried_through(ontology_repo: RepoBuilder) -> No
         message="mixed",
     )
 
-    assert read_history(ontology_repo.path, HEAD, ONTOLOGY)[0].commit.other_files == 2
+    assert read_history(ontology_repo.path, HEAD, ONTOLOGY)[0].commit.other_files == 2  # noqa PLR2004
 
 
 def test_export_diff_html_creates_and_caches_file(ontology_repo: RepoBuilder) -> None:
@@ -110,7 +120,7 @@ def test_open_exported_diff_html_opens_in_browser(ontology_repo: RepoBuilder) ->
 
     sha = ontology_repo.commit(ttl=CLASS_A, message="initial")
     expected_path = export_diff_html(ontology_repo.path, ONTOLOGY, sha)
-    with patch("webbrowser.open") as mock_open:
+    with patch(PATCH_OPEN_BROWSER) as mock_open:
         res = open_exported_diff_html(ontology_repo.path, ONTOLOGY, sha)
         assert res is None
         mock_open.assert_called_once_with(expected_path.resolve().as_uri())
@@ -123,7 +133,50 @@ def test_open_exported_diff_html_with_none_sha_does_not_open_browser(
 
     from semanticdiff.history import open_exported_diff_html
 
-    with patch("webbrowser.open") as mock_open:
+    with patch(PATCH_OPEN_BROWSER) as mock_open:
         res = open_exported_diff_html(ontology_repo.path, ONTOLOGY, None)
         assert res is None
         mock_open.assert_not_called()
+
+
+def test_export_branch_diff_html_creates_and_caches_file(ontology_repo: RepoBuilder) -> None:
+    from semanticdiff.history import export_branch_diff_html
+
+    _setup_feature_branch(ontology_repo)
+
+    out_file = export_branch_diff_html(ontology_repo.path, ONTOLOGY, base="main", head="HEAD")
+    assert out_file.exists()
+
+    # Cached on repeated call
+    out_file2 = export_branch_diff_html(ontology_repo.path, ONTOLOGY, base="main", head="HEAD")
+    assert out_file2 == out_file
+
+
+def test_export_branch_diff_html_with_status_filter(ontology_repo: RepoBuilder) -> None:
+    from semanticdiff.history import export_branch_diff_html
+
+    _setup_feature_branch(ontology_repo)
+
+    out_file = export_branch_diff_html(
+        ontology_repo.path, ONTOLOGY, base="main", head="HEAD", status="added"
+    )
+    assert out_file.exists()
+    assert "_added.html" in out_file.name
+
+
+def test_open_exported_branch_diff_html_opens_in_browser(
+    ontology_repo: RepoBuilder,
+) -> None:
+    from unittest.mock import patch
+
+    from semanticdiff.history import (
+        export_branch_diff_html,
+        open_exported_branch_diff_html,
+    )
+
+    _setup_feature_branch(ontology_repo)
+
+    expected_path = export_branch_diff_html(ontology_repo.path, ONTOLOGY, base="main", head="HEAD")
+    with patch(PATCH_OPEN_BROWSER) as mock_open:
+        open_exported_branch_diff_html(ontology_repo.path, ONTOLOGY, base="main", head="HEAD")
+        mock_open.assert_called_once_with(expected_path.resolve().as_uri())

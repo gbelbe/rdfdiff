@@ -14,7 +14,9 @@ from __future__ import annotations
 from semanticdiff.changeset import compare
 from semanticdiff.history import (
     CommitChanges,
+    export_branch_diff_html,
     export_diff_html,
+    open_exported_branch_diff_html,
     open_exported_diff_html,
     read_history,
 )
@@ -28,8 +30,10 @@ __all__ = [
     "CommitChanges",
     "EntityKind",
     "compare",
+    "export_branch_diff_html",
     "export_diff_html",
     "make_visual_diff_bindings",
+    "open_exported_branch_diff_html",
     "open_exported_diff_html",
     "read_history",
 ]
