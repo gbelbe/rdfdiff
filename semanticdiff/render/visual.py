@@ -46,7 +46,7 @@ _VALID_STATUSES = {_STATUS_ADDED, _STATUS_DELETED, _STATUS_UPDATED}
 _MAX_LITERAL_LABEL_LEN = 30
 
 
-def render_diff_html( # noqa CG002
+def render_diff_html(  # noqa CG002
     base: Graph,
     later: Graph,
     output_path: Path,
