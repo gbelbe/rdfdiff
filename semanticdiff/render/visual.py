@@ -43,8 +43,10 @@ _PREFIX_MAP: dict[str, str] = {
 
 _VALID_STATUSES = {_STATUS_ADDED, _STATUS_DELETED, _STATUS_UPDATED}
 
+_MAX_LITERAL_LABEL_LEN = 30
 
-def render_diff_html(
+
+def render_diff_html( # noqa CG002
     base: Graph,
     later: Graph,
     output_path: Path,
@@ -154,8 +156,8 @@ def _format_node_label(node: Node) -> str:
         return _shorten_uri(str(node))
     if isinstance(node, Literal):
         val = str(node)
-        if len(val) > 30:
-            val = f"{val[:27]}..."
+        if len(val) > _MAX_LITERAL_LABEL_LEN:
+            val = f"{val[: _MAX_LITERAL_LABEL_LEN - 3]}..."
         if node.language:
             return f'"{val}"@{node.language}'
         if node.datatype:
@@ -221,6 +223,16 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     <head>
         <meta charset="utf-8">
         <script>
+function updateAllNodes(allNodes) {
+  var updateArray = [];
+  for (let nodeId in allNodes) {
+    if (allNodes.hasOwnProperty(nodeId)) {
+      updateArray.push(allNodes[nodeId]);
+    }
+  }
+  nodes.update(updateArray);
+}
+
 function neighbourhoodHighlight(params) {
   allNodes = nodes.get({ returnType: "Object" });
   if (params.nodes.length > 0) {
@@ -281,22 +293,7 @@ function neighbourhoodHighlight(params) {
     highlightActive = false;
   }
 
-  var updateArray = [];
-  if (params.nodes.length > 0) {
-    for (let nodeId in allNodes) {
-      if (allNodes.hasOwnProperty(nodeId)) {
-        updateArray.push(allNodes[nodeId]);
-      }
-    }
-    nodes.update(updateArray);
-  } else {
-    for (let nodeId in allNodes) {
-      if (allNodes.hasOwnProperty(nodeId)) {
-        updateArray.push(allNodes[nodeId]);
-      }
-    }
-    nodes.update(updateArray);
-  }
+  updateAllNodes(allNodes);
 }
 
 function filterHighlight(params) {
@@ -331,22 +328,7 @@ function filterHighlight(params) {
     filterActive = false;
   }
 
-  var updateArray = [];
-  if (params.nodes.length > 0) {
-    for (let nodeId in allNodes) {
-      if (allNodes.hasOwnProperty(nodeId)) {
-        updateArray.push(allNodes[nodeId]);
-      }
-    }
-    nodes.update(updateArray);
-  } else {
-    for (let nodeId in allNodes) {
-      if (allNodes.hasOwnProperty(nodeId)) {
-        updateArray.push(allNodes[nodeId]);
-      }
-    }
-    nodes.update(updateArray);
-  }
+  updateAllNodes(allNodes);
 }
         </script>
         <link
