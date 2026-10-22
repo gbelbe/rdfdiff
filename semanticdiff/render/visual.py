@@ -371,12 +371,52 @@ function filterHighlight(params) {
         <center>
           <h1 style="color: #f8fafc; margin-top: 10px;">__TITLE__</h1>
         </center>
+        <div class="legend">
+          <div class="legend-title">Diff Legend</div>
+          <div class="legend-row"><span class="legend-dot dot-added"></span>Added</div>
+          <div class="legend-row"><span class="legend-dot dot-deleted"></span>Deleted</div>
+          <div class="legend-row"><span class="legend-dot dot-updated"></span>Updated</div>
+        </div>
         <style type="text/css">
              body {
                  background-color: #0f172a;
                  color: #f8fafc;
                  margin: 0;
              }
+             .legend {
+                 position: absolute;
+                 top: 16px;
+                 right: 20px;
+                 z-index: 1000;
+                 background: rgba(15, 23, 42, 0.85);
+                 padding: 10px 14px;
+                 border-radius: 8px;
+                 border: 1px solid #334155;
+                 font-size: 13px;
+             }
+             .legend-title {
+                 font-weight: 600;
+                 margin-bottom: 6px;
+                 color: #cbd5e1;
+             }
+             .legend-row {
+                 display: flex;
+                 align-items: center;
+                 margin-bottom: 4px;
+             }
+             .legend-row:last-child {
+                 margin-bottom: 0;
+             }
+             .legend-dot {
+                 display: inline-block;
+                 width: 10px;
+                 height: 10px;
+                 border-radius: 50%;
+                 margin-right: 8px;
+             }
+             .dot-added { background-color: #22c55e; }
+             .dot-deleted { background-color: #ef4444; }
+             .dot-updated { background-color: #f59e0b; }
              #mynetwork {
                  width: 100%;
                  height: calc(100vh - 60px);
